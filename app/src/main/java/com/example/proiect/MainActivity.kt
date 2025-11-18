@@ -1,15 +1,34 @@
 package com.example.proiect
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ListView
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import com.google.android.gms.location.LocationServices
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,6 +36,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.IOException
+import java.util.Locale
 
 data class WeatherData(val temperature: Double, val weatherCode: Int)
 
@@ -27,12 +48,14 @@ data class City(@PrimaryKey val id: String, val name: String, val lat: Double, v
 interface FavoritesDao {
     @Query("SELECT * FROM favorites") suspend fun getAll(): List<City>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun add(city: City)
+    @Query("DELETE FROM favorites WHERE id = :cityId") suspend fun remove(cityId: String)
 }
 
 @Database(entities = [City::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun favoritesDao(): FavoritesDao
 }
+
 
 class WeatherRepo(private val favoritesDao: FavoritesDao) {
     private val client = OkHttpClient()
@@ -77,8 +100,8 @@ class WeatherRepo(private val favoritesDao: FavoritesDao) {
 
     suspend fun getFavoriteCities(): List<City> = favoritesDao.getAll()
     suspend fun addFavoriteCity(city: City) = favoritesDao.add(city)
+    suspend fun removeFavoriteCity(city: City) = favoritesDao.remove(city.id)
 }
-
 
 class HomeFragment : Fragment() {
     private val repo: WeatherRepo by lazy { (activity as MainActivity).weatherRepo }
@@ -118,9 +141,10 @@ class HomeFragment : Fragment() {
     }
 }
 
-
 class FavoritesFragment : Fragment() {
     private val repo: WeatherRepo by lazy { (activity as MainActivity).weatherRepo }
+    private lateinit var adapter: ArrayAdapter<String>
+    private var favoriteCities: List<City> = emptyList()
 
     override fun onCreateView(inflater: LayoutInflater, c: ViewGroup?, state: Bundle?) = inflater.inflate(R.layout.fragment_favorites, c, false)
 
@@ -129,19 +153,29 @@ class FavoritesFragment : Fragment() {
         val etCity: EditText = view.findViewById(R.id.et_city_search)
         val btnAdd: Button = view.findViewById(R.id.btn_add_favorite)
         val lvFavs: ListView = view.findViewById(R.id.lv_favorites)
-        val adapter = ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_1)
+        adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1)
         lvFavs.adapter = adapter
 
         fun refreshList() {
             lifecycleScope.launch {
-                val cities = repo.getFavoriteCities()
+                favoriteCities = repo.getFavoriteCities()
                 adapter.clear()
-                adapter.addAll(cities.map { it.name })
-                adapter.notifyDataSetChanged()
-                lvFavs.setOnItemClickListener { _, _, position, _ ->
-                    (activity as? MainActivity)?.showWeatherForCity(cities[position])
-                }
+                adapter.addAll(favoriteCities.map { it.name })
             }
+        }
+
+        lvFavs.setOnItemClickListener { _, _, position, _ ->
+            (activity as? MainActivity)?.showWeatherForCity(favoriteCities[position])
+        }
+
+        lvFavs.setOnItemLongClickListener { _, _, position, _ ->
+            val cityToRemove = favoriteCities[position]
+            lifecycleScope.launch {
+                repo.removeFavoriteCity(cityToRemove)
+                Toast.makeText(context, "${cityToRemove.name} șters!", Toast.LENGTH_SHORT).show()
+                refreshList()
+            }
+            true
         }
 
         btnAdd.setOnClickListener {
@@ -161,9 +195,19 @@ class FavoritesFragment : Fragment() {
     }
 }
 
+
 class MainActivity : AppCompatActivity() {
 
     lateinit var weatherRepo: WeatherRepo
+    private val locationPermissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            fetchAndShowCurrentLocationWeather()
+        } else {
+            showWeatherForCity(null) // Show default Bucharest
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -172,14 +216,59 @@ class MainActivity : AppCompatActivity() {
         val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "weather-db").build()
         weatherRepo = WeatherRepo(db.favoritesDao())
 
-        if (savedInstanceState == null) { showWeatherForCity(null) }
+        if (savedInstanceState == null) {
+            requestLocationPermission()
+        }
 
         findViewById<BottomNavigationView>(R.id.bottom_navigation).setOnItemSelectedListener { 
             when (it.itemId) {
-                R.id.nav_home -> showWeatherForCity(null)
+                R.id.nav_home -> requestLocationPermission() // Re-fetch location or show default
                 R.id.nav_favorites -> supportFragmentManager.beginTransaction().replace(R.id.fragment_container, FavoritesFragment()).commit()
             }
             true
+        }
+    }
+
+    private fun requestLocationPermission() {
+        when {
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED -> {
+                fetchAndShowCurrentLocationWeather()
+            }
+            else -> {
+                locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+        }
+    }
+
+    private fun fetchAndShowCurrentLocationWeather() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            if (location != null) {
+                lifecycleScope.launch {
+                    val geocoder = Geocoder(this@MainActivity, Locale.getDefault())
+                    var city: City? = null
+                    try {
+                        val addresses = withContext(Dispatchers.IO) {
+                            geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                        }
+                        if (addresses != null && addresses.isNotEmpty()) {
+                            val address = addresses[0]
+                            city = City(
+                                id = "${location.latitude},${location.longitude}",
+                                name = address.locality ?: "Locație Curentă",
+                                lat = location.latitude,
+                                lon = location.longitude
+                            )
+                        }
+                    } catch (e: IOException) {
+                       // Could not get city name
+                    }
+                    showWeatherForCity(city ?: City("${location.latitude},${location.longitude}","Locație Curentă", location.latitude, location.longitude))
+                }
+            } else {
+                showWeatherForCity(null) // Fallback to default if location is null
+            }
         }
     }
 
