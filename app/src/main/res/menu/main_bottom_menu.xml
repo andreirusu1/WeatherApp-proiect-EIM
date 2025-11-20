@@ -5,7 +5,15 @@
         android:icon="@drawable/ic_home"
         android:title="Acasă" />
     <item
+        android:id="@+id/nav_forecast"
+        android:icon="@android:drawable/ic_menu_my_calendar"
+        android:title="Prognoză" />
+    <item
         android:id="@+id/nav_favorites"
         android:icon="@drawable/ic_favorite"
         android:title="Favorite" />
+    <item
+        android:id="@+id/nav_settings"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:title="Setări" />
 </menu>
