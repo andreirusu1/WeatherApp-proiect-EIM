@@ -1,0 +1,315 @@
+package com.example.proiect
+
+import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+// Cerinta Etapa 1: Utilizare Jetpack Compose pentru UI modern si declarativ
+@Composable
+fun WeatherCard(title: String, value: String, icon: ImageVector) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.7f)),
+        modifier = Modifier.padding(4.dp).size(width = 100.dp, height = 90.dp),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text(text = title, fontSize = 11.sp)
+            Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+// Componenta reutilizabila pentru lista de prognoza orara
+@Composable
+fun HourlyForecastItem(forecast: HourlyForecast) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = forecast.time, 
+            fontSize = 16.sp, 
+            color = Color.White, 
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(60.dp)
+        )
+        Icon(
+            getWeatherIcon(forecast.weatherCode),
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = Color.White
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = getWeatherDescription(forecast.weatherCode),
+            fontSize = 16.sp,
+            color = Color.White,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "${forecast.temp}°", 
+            fontSize = 18.sp, 
+            fontWeight = FontWeight.Bold, 
+            color = Color.White
+        )
+    }
+}
+
+// Cerinta Etapa 1: UI complex si animatii (AnimatedVisibility)
+// Ecranul principal construit in Compose
+@Composable
+fun HomeScreen(viewModel: WeatherViewModel) {
+    // Colectam datele din ViewModel folosind StateFlow
+    val city by viewModel.currentCity.collectAsStateWithLifecycle()
+    val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
+    
+    LaunchedEffect(city) {
+        viewModel.fetchWeatherForCity(city)
+    }
+
+    // Determinam culoarea de fundal in functie de vreme
+    val backgroundBrush = weatherData?.let { getWeatherColor(it.weatherCode) } 
+        ?: Brush.verticalGradient(listOf(Color.LightGray, Color.Gray))
+
+    Box(modifier = Modifier.fillMaxSize().background(backgroundBrush)) {
+        // Cerinta Etapa 1: Animatii UI
+        AnimatedVisibility(
+            visible = weatherData != null,
+            enter = fadeIn(animationSpec = tween(1000)) + slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(1000)),
+            exit = fadeOut()
+        ) {
+            if (weatherData != null) {
+                LazyColumn(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    contentPadding = PaddingValues(top = 40.dp, bottom = 16.dp)
+                ) {
+                    item {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            Text(city.name, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Icon(
+                                getWeatherIcon(weatherData!!.weatherCode),
+                                contentDescription = null,
+                                modifier = Modifier.size(120.dp),
+                                tint = Color.White
+                            )
+                            Text("${weatherData!!.temperature}°C", fontSize = 64.sp, color = Color.White)
+                            Text(getWeatherDescription(weatherData!!.weatherCode), fontSize = 24.sp, color = Color.White)
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                WeatherCard("Umiditate", "${weatherData!!.humidity}%", Icons.Default.WaterDrop)
+                                WeatherCard("Vânt", "${weatherData!!.windSpeed} km/h", Icons.Default.Air)
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Text(
+                                "Prognoză Orară", 
+                                color = Color.White, 
+                                fontWeight = FontWeight.Bold, 
+                                fontSize = 20.sp,
+                                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp).align(Alignment.Start)
+                            )
+                        }
+                    }
+                    
+                    items(weatherData!!.hourly) {
+                        HourlyForecastItem(it)
+                        Divider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(horizontal = 16.dp))
+                    }
+                }
+            }
+        }
+        
+        if (weatherData == null) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = Color.White)
+        }
+    }
+}
+
+// Ecranul de prognoza pe zile
+@Composable
+fun ForecastScreen(viewModel: WeatherViewModel) {
+    val city by viewModel.currentCity.collectAsStateWithLifecycle()
+    val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
+
+    LaunchedEffect(city) {
+         viewModel.fetchWeatherForCity(city)
+    }
+    
+    val backgroundBrush = weatherData?.let { getWeatherColor(it.weatherCode) } 
+        ?: Brush.verticalGradient(listOf(Color.LightGray, Color.Gray))
+
+    Box(modifier = Modifier.fillMaxSize().background(backgroundBrush)) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text("7 Zile - ${city.name}", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(modifier = Modifier.height(16.dp))
+            if (weatherData != null) {
+                LazyColumn {
+                    items(weatherData!!.daily) { day ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            elevation = CardDefaults.cardElevation(2.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.8f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(day.date, fontWeight = FontWeight.Bold)
+                                    Text(getWeatherDescription(day.weatherCode), fontSize = 13.sp, color = Color.DarkGray)
+                                }
+                                Icon(getWeatherIcon(day.weatherCode), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+                                Text("${day.maxTemp}° / ${day.minTemp}°", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+// Ecranul de favorite si cautare
+@Composable
+fun FavoritesScreen(viewModel: WeatherViewModel, onCitySelected: () -> Unit) {
+    var searchQuery by remember { mutableStateOf("") }
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val suggestions by viewModel.searchResults.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Cerinta Etapa 1: Optimizare UX (Debounce) pentru cautare
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.length > 2) {
+             delay(500)
+             viewModel.searchCities(searchQuery)
+        } else {
+             viewModel.searchCities("")
+        }
+    }
+
+    val backgroundBrush = Brush.verticalGradient(listOf(Color(0xFF42A5F5), Color(0xFF26C6DA)))
+
+    Box(modifier = Modifier.fillMaxSize().background(backgroundBrush)) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text("Favorite & Căutare", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Caută oraș...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { Icon(Icons.Default.Search, null) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.9f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.9f)
+                    )
+                )
+                
+                if (suggestions.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier.padding(top = 60.dp).fillMaxWidth().heightIn(max = 200.dp),
+                        shadowElevation = 4.dp,
+                        tonalElevation = 4.dp
+                    ) {
+                        LazyColumn {
+                            items(suggestions) { city ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.addToFavorites(city)
+                                            searchQuery = ""
+                                            Toast.makeText(context, "Adăugat!", Toast.LENGTH_SHORT).show()
+                                        }
+                                        .padding(16.dp)
+                                ) {
+                                    Icon(Icons.Default.LocationOn, null, tint = Color.Gray)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(city.name)
+                                }
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn {
+                items(favorites, key = { it.id }) { city ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { 
+                                viewModel.updateCity(city)
+                                onCitySelected() 
+                            },
+                        elevation = CardDefaults.cardElevation(2.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.85f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(city.name, fontSize = 18.sp)
+                            IconButton(onClick = {
+                                viewModel.removeFromFavorites(city)
+                            }) {
+                                Icon(Icons.Default.Delete, null, tint = Color.Red)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen() {
+    val backgroundBrush = Brush.verticalGradient(listOf(Color(0xFFAB47BC), Color(0xFF7E57C2)))
+    Box(modifier = Modifier.fillMaxSize().background(backgroundBrush), contentAlignment = Alignment.Center) {
+        Text("Setări (Gol)", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+    }
+}

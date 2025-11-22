@@ -2,7 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/nav_home"
-        android:icon="@drawable/ic_home"
+        android:icon="@android:drawable/ic_menu_compass"
         android:title="Acasă" />
     <item
         android:id="@+id/nav_forecast"
@@ -10,7 +10,7 @@
         android:title="Prognoză" />
     <item
         android:id="@+id/nav_favorites"
-        android:icon="@drawable/ic_favorite"
+        android:icon="@android:drawable/btn_star"
         android:title="Favorite" />
     <item
         android:id="@+id/nav_settings"
