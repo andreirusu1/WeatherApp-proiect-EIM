@@ -33,7 +33,7 @@ Implementare: Foloseste FusedLocationProviderClient pentru a obtine coordonatele
 ## Tehnologii si Biblioteci Utilizate
 *   **Limbaj:** Kotlin
 *   **UI:** Android Fragments, Jetpack Compose, Material Design 3
-*   **Networking:** OkHttp 4
+*   **Networking:** OkHttp
 *   **Async:** Kotlin Coroutines, ViewModel, StateFlow
 *   **Localizare:** Google Play Services Location
 *   **Baza de date:** Room Database
