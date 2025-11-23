@@ -18,13 +18,12 @@
 *   **Implementare:** Aplicatia comunica in timp real cu API-ul public **Open-Meteo**.
 *   **Tehnic:**
     *   Se utilizeaza clientul HTTP **OkHttp**.
-    *   Raspunsurile JSON sunt descarcate si parsate manual (`JSONObject`), demonstrand controlul complet asupra fluxului de date.
+    *   Raspunsurile JSON sunt descarcate si parsate manual (`JSONObject`),  controlul fiind complet asupra fluxului de date.
 
 ### 4. Alte functionalitati: Localizare (1p)
 *   **Implementare:** Aplicatia detecteaza automat orasul utilizatorului la pornire.
 *   **Tehnic:**
     *   Utilizare `FusedLocationProviderClient` din Google Play Services.
-    *   Conversia coordonatelor GPS in nume de oras (Reverse Geocoding).
 
 ### 5. Utilizare Fragmente (0.5p)
 *   **Implementare:** Intreaga structura de navigare respecta cerinta explicita de a folosi sistemul de Fragmente Android (`HomeFragment`, `FavoritesFragment`, etc.).
