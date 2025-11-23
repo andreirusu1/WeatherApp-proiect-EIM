@@ -9,19 +9,16 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-class WeatherRepo(private val favoritesDao: FavoritesDao) {
+class WeatherRepo(private val favoritesDao: FavoritesDao, private val userDao: UserDao) {
     private val client = OkHttpClient()
 
     // Cerinta Etapa 1: Networking (REST API) si Procese background
-    // Functie suspendata care ruleaza pe thread-ul IO (background) pentru a face request HTTP si a procesa JSON-ul
     suspend fun fetchWeatherData(lat: String, lon: String): WeatherData? = withContext(Dispatchers.IO) {
         val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto"
         try {
-            // Cerinta Etapa 1: Networking folosind OkHttpClient
             val response = client.newCall(Request.Builder().url(url).build()).execute()
             val body = response.body?.string()
             if (response.isSuccessful && body != null) {
-                // Parsare JSON manuala
                 val json = JSONObject(body)
                 val current = json.getJSONObject("current")
                 
@@ -73,7 +70,6 @@ class WeatherRepo(private val favoritesDao: FavoritesDao) {
     }
 
     // Cerinta Etapa 1: Networking si Background
-    // Cauta orase folosind API-ul de geocoding, tot pe thread-ul IO
     suspend fun searchCities(name: String): List<City> = withContext(Dispatchers.IO) {
         val url = "https://geocoding-api.open-meteo.com/v1/search?name=$name&count=5&language=ro&format=json"
         try {
@@ -89,8 +85,10 @@ class WeatherRepo(private val favoritesDao: FavoritesDao) {
                         val cityName = obj.getString("name")
                         val displayName = if (country.isNotEmpty()) "$cityName, $country" else cityName
                         
+                        // Nota: La search, City nu are ID de user inca, punem 0 temporar
                         list.add(City(
                             id = "${obj.getDouble("latitude")},${obj.getDouble("longitude")}",
+                            userId = 0,
                             name = displayName,
                             lat = obj.getDouble("latitude"),
                             lon = obj.getDouble("longitude")
@@ -102,8 +100,16 @@ class WeatherRepo(private val favoritesDao: FavoritesDao) {
         } catch (e: Exception) { emptyList() }
     }
 
-    // Functii pentru baza de date Room (potential Etapa 2, dar folosite pentru persistenta datelor)
-    suspend fun getFavoriteCities(): List<City> = favoritesDao.getAll()
+    // Auth operations
+    suspend fun login(username: String, pass: String): User? = userDao.login(username, pass)
+    suspend fun register(user: User): Boolean {
+        if (userDao.checkUserExists(user.username) != null) return false
+        userDao.register(user)
+        return true
+    }
+
+    // Favorites operations per user
+    suspend fun getFavoriteCities(userId: Int): List<City> = favoritesDao.getAllForUser(userId)
     suspend fun addFavoriteCity(city: City) = favoritesDao.add(city)
-    suspend fun removeFavoriteCity(city: City) = favoritesDao.remove(city.id)
+    suspend fun removeFavoriteCity(cityId: String, userId: Int) = favoritesDao.remove(cityId, userId)
 }

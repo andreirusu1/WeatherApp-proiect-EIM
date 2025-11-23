@@ -46,7 +46,6 @@ fun WeatherCard(title: String, value: String, icon: ImageVector) {
     }
 }
 
-// Componenta reutilizabila pentru lista de prognoza orara
 @Composable
 fun HourlyForecastItem(forecast: HourlyForecast) {
     Row(
@@ -82,24 +81,86 @@ fun HourlyForecastItem(forecast: HourlyForecast) {
     }
 }
 
-// Cerinta Etapa 1: UI complex si animatii (AnimatedVisibility)
-// Ecranul principal construit in Compose
+// UI Login Screen
+@Composable
+fun AuthScreen(viewModel: WeatherViewModel, onLoginSuccess: () -> Unit) {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val loginError by viewModel.loginError.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+
+    LaunchedEffect(currentUser) {
+        if (currentUser != null) {
+            onLoginSuccess()
+        }
+    }
+
+    val backgroundBrush = Brush.verticalGradient(listOf(Color(0xFF1976D2), Color(0xFF64B5F6)))
+
+    Box(modifier = Modifier.fillMaxSize().background(backgroundBrush), contentAlignment = Alignment.Center) {
+        Card(
+            modifier = Modifier.padding(24.dp).fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Autentificare", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Utilizator") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Parolă") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (loginError != null) {
+                    Text(loginError!!, color = Color.Red, modifier = Modifier.padding(vertical = 8.dp))
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Button(onClick = { viewModel.login(username, password) }) {
+                        Text("Login")
+                    }
+                    OutlinedButton(onClick = { viewModel.register(username, password) }) {
+                        Text("Register")
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun HomeScreen(viewModel: WeatherViewModel) {
-    // Colectam datele din ViewModel folosind StateFlow
     val city by viewModel.currentCity.collectAsStateWithLifecycle()
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     
     LaunchedEffect(city) {
         viewModel.fetchWeatherForCity(city)
     }
 
-    // Determinam culoarea de fundal in functie de vreme
     val backgroundBrush = weatherData?.let { getWeatherColor(it.weatherCode) } 
         ?: Brush.verticalGradient(listOf(Color.LightGray, Color.Gray))
 
     Box(modifier = Modifier.fillMaxSize().background(backgroundBrush)) {
-        // Cerinta Etapa 1: Animatii UI
         AnimatedVisibility(
             visible = weatherData != null,
             enter = fadeIn(animationSpec = tween(1000)) + slideInVertically(initialOffsetY = { 50 }, animationSpec = tween(1000)),
@@ -112,6 +173,8 @@ fun HomeScreen(viewModel: WeatherViewModel) {
                 ) {
                     item {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            Text("Salut, ${currentUser?.username ?: "Guest"}", fontSize = 20.sp, color = Color.White)
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(city.name, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             Spacer(modifier = Modifier.height(8.dp))
                             Icon(
@@ -155,7 +218,6 @@ fun HomeScreen(viewModel: WeatherViewModel) {
     }
 }
 
-// Ecranul de prognoza pe zile
 @Composable
 fun ForecastScreen(viewModel: WeatherViewModel) {
     val city by viewModel.currentCity.collectAsStateWithLifecycle()
@@ -204,7 +266,6 @@ fun ForecastScreen(viewModel: WeatherViewModel) {
     }
 }
 
-// Ecranul de favorite si cautare
 @Composable
 fun FavoritesScreen(viewModel: WeatherViewModel, onCitySelected: () -> Unit) {
     var searchQuery by remember { mutableStateOf("") }
@@ -213,7 +274,6 @@ fun FavoritesScreen(viewModel: WeatherViewModel, onCitySelected: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Cerinta Etapa 1: Optimizare UX (Debounce) pentru cautare
     LaunchedEffect(searchQuery) {
         if (searchQuery.length > 2) {
              delay(500)
@@ -307,9 +367,14 @@ fun FavoritesScreen(viewModel: WeatherViewModel, onCitySelected: () -> Unit) {
 }
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(viewModel: WeatherViewModel, onLogout: () -> Unit) {
     val backgroundBrush = Brush.verticalGradient(listOf(Color(0xFFAB47BC), Color(0xFF7E57C2)))
     Box(modifier = Modifier.fillMaxSize().background(backgroundBrush), contentAlignment = Alignment.Center) {
-        Text("Setări (Gol)", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Button(onClick = {
+            viewModel.logout()
+            onLogout()
+        }) {
+            Text("Delogare")
+        }
     }
 }

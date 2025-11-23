@@ -12,6 +12,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
+// Fragment pentru autentificare (Login/Register)
+class AuthFragment : Fragment() {
+    private val viewModel: WeatherViewModel by activityViewModels()
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        return ComposeView(requireContext()).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFF1976D2))) {
+                    AuthScreen(viewModel, onLoginSuccess = {
+                        (activity as? MainActivity)?.onLoginSuccess()
+                    })
+                }
+            }
+        }
+    }
+}
+
 // Cerinta Etapa 1: Utilizare Fragmente
 // Acest fisier contine clasele Fragment care servesc drept containere pentru ecranele Jetpack Compose
 class HomeFragment : Fragment() {
@@ -66,12 +84,16 @@ class FavoritesFragment : Fragment() {
 }
 
 class SettingsFragment : Fragment() {
+    private val viewModel: WeatherViewModel by activityViewModels()
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFF1976D2))) {
-                    SettingsScreen()
+                    SettingsScreen(viewModel, onLogout = {
+                        (activity as? MainActivity)?.onLogout()
+                    })
                 }
             }
         }

@@ -3,6 +3,7 @@ package com.example.proiect
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -34,8 +35,12 @@ class MainActivity : AppCompatActivity() {
             fetchLocation()
         }
 
-        // Cerinta Etapa 1: Utilizare Fragmente si Animatii intre ele
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+        
+        // Initial ascundem bara de navigare (suntem in ecranul de Login)
+        bottomNav.visibility = View.GONE
+
+        // Cerinta Etapa 1: Utilizare Fragmente si Animatii intre ele
         bottomNav.setOnItemSelectedListener { item ->
             val newTabId = item.itemId
             val transaction = supportFragmentManager.beginTransaction()
@@ -63,10 +68,26 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // Incarcam fragmentul initial daca aplicatia porneste prima data
+        // Incarcam fragmentul initial de Autentificare
         if (savedInstanceState == null) {
-            replaceFragment(HomeFragment())
+            replaceFragment(AuthFragment())
         }
+    }
+
+    // Apelat cand login-ul reuseste
+    fun onLoginSuccess() {
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+        bottomNav.visibility = View.VISIBLE
+        replaceFragment(HomeFragment())
+        selectedTabId = R.id.nav_home
+        bottomNav.selectedItemId = R.id.nav_home
+    }
+
+    // Apelat la delogare
+    fun onLogout() {
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+        bottomNav.visibility = View.GONE
+        replaceFragment(AuthFragment())
     }
 
     // Functie ajutatoare pentru a determina indexul tab-ului (folosita la calculul directiei animatiei)
