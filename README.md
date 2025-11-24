@@ -20,12 +20,12 @@
     *   Se utilizeaza clientul HTTP **OkHttp**.
     *   Raspunsurile JSON sunt descarcate si parsate manual (`JSONObject`),  controlul fiind complet asupra fluxului de date.
 
-### 4. Alte functionalitati: Localizare (1p)
+### 4. Alte functionalitati: Localizare 
 *   **Implementare:** Aplicatia detecteaza automat orasul utilizatorului la pornire.
 *   **Tehnic:**
     *   Utilizare `FusedLocationProviderClient` din Google Play Services.
 
-### 5. Utilizare Fragmente (0.5p)
+### 5. Utilizare Fragmente 
 *   **Implementare:** Intreaga structura de navigare respecta cerinta explicita de a folosi sistemul de Fragmente Android (`HomeFragment`, `FavoritesFragment`, etc.).
 
 ---
