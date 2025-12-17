@@ -1,67 +1,110 @@
 package com.example.proiect
 
+import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-class WeatherRepo(private val favoritesDao: FavoritesDao, private val userDao: UserDao) {
-    private val client = OkHttpClient()
+class WeatherRepo(
+    private val favoritesDao: FavoritesDao, 
+    private val userDao: UserDao,
+    private val client: OkHttpClient = OkHttpClient(),
+    private val weatherBaseUrl: String = "https://api.open-meteo.com/v1/",
+    private val geocodingBaseUrl: String = "https://geocoding-api.open-meteo.com/v1/"
+) {
+    private val gson = Gson()
+
+    // Modele interne pentru Gson (DTOs)
+    private data class WeatherResponse(
+        val current: CurrentWeather,
+        val hourly: HourlyWeather,
+        val daily: DailyWeather
+    )
+
+    private data class CurrentWeather(
+        @SerializedName("temperature_2m") val temperature: Double,
+        @SerializedName("weather_code") val weatherCode: Int,
+        @SerializedName("relative_humidity_2m") val humidity: Int,
+        @SerializedName("wind_speed_10m") val windSpeed: Double
+    )
+
+    private data class HourlyWeather(
+        val time: List<String>,
+        @SerializedName("temperature_2m") val temperature: List<Double>,
+        @SerializedName("weather_code") val weatherCode: List<Int>
+    )
+
+    private data class DailyWeather(
+        val time: List<String>,
+        @SerializedName("weather_code") val weatherCode: List<Int>,
+        @SerializedName("temperature_2m_max") val maxTemp: List<Double>,
+        @SerializedName("temperature_2m_min") val minTemp: List<Double>
+    )
+
+    private data class GeocodingResponse(
+        val results: List<GeocodingResult>?
+    )
+
+    private data class GeocodingResult(
+        val name: String,
+        val latitude: Double,
+        val longitude: Double,
+        val country: String?
+    )
 
     // Cerinta Etapa 1: Networking (REST API) si Procese background
     suspend fun fetchWeatherData(lat: String, lon: String): WeatherData? = withContext(Dispatchers.IO) {
-        val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto"
+        val url = "${weatherBaseUrl}forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto"
         try {
             val response = client.newCall(Request.Builder().url(url).build()).execute()
             val body = response.body?.string()
+            
             if (response.isSuccessful && body != null) {
-                val json = JSONObject(body)
-                val current = json.getJSONObject("current")
+                val weatherResponse = gson.fromJson(body, WeatherResponse::class.java)
                 
-                val dailyJson = json.getJSONObject("daily")
-                val dTime = dailyJson.getJSONArray("time")
-                val dCode = dailyJson.getJSONArray("weather_code")
-                val dMax = dailyJson.getJSONArray("temperature_2m_max")
-                val dMin = dailyJson.getJSONArray("temperature_2m_min")
+                // Procesare Daily
                 val dailyList = mutableListOf<DailyForecast>()
-                
                 val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
                 val outputFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
                 
-                for (i in 0 until dTime.length()) {
-                    val rawDate = dTime.getString(i)
+                weatherResponse.daily.time.forEachIndexed { i, rawDate ->
                     val parsedDate = LocalDate.parse(rawDate, inputFormatter)
                     val formattedDate = parsedDate.format(outputFormatter)
-                    
-                    dailyList.add(DailyForecast(formattedDate, dMax.getDouble(i), dMin.getDouble(i), dCode.getInt(i)))
+                    dailyList.add(
+                        DailyForecast(
+                            date = formattedDate,
+                            maxTemp = weatherResponse.daily.maxTemp[i],
+                            minTemp = weatherResponse.daily.minTemp[i],
+                            weatherCode = weatherResponse.daily.weatherCode[i]
+                        )
+                    )
                 }
 
-                val hourlyJson = json.getJSONObject("hourly")
-                val hTime = hourlyJson.getJSONArray("time")
-                val hTemp = hourlyJson.getJSONArray("temperature_2m")
-                val hCode = hourlyJson.getJSONArray("weather_code")
+                // Procesare Hourly
                 val hourlyList = mutableListOf<HourlyForecast>()
-                
                 val now = LocalDateTime.now()
                 val currentHour = now.hour
+                val hTime = weatherResponse.hourly.time
                 
-                for (i in currentHour until (currentHour + 24).coerceAtMost(hTime.length())) {
+                val limit = (currentHour + 24).coerceAtMost(hTime.size)
+                for (i in currentHour until limit) {
                      hourlyList.add(HourlyForecast(
-                         time = hTime.getString(i).substringAfter("T"),
-                         temp = hTemp.getDouble(i),
-                         weatherCode = hCode.getInt(i)
+                         time = hTime[i].substringAfter("T"),
+                         temp = weatherResponse.hourly.temperature[i],
+                         weatherCode = weatherResponse.hourly.weatherCode[i]
                      ))
                 }
 
                 WeatherData(
-                    temperature = current.getDouble("temperature_2m"),
-                    weatherCode = current.getInt("weather_code"),
-                    humidity = current.getInt("relative_humidity_2m"),
-                    windSpeed = current.getDouble("wind_speed_10m"),
+                    temperature = weatherResponse.current.temperature,
+                    weatherCode = weatherResponse.current.weatherCode,
+                    humidity = weatherResponse.current.humidity,
+                    windSpeed = weatherResponse.current.windSpeed,
                     daily = dailyList,
                     hourly = hourlyList
                 )
@@ -71,29 +114,23 @@ class WeatherRepo(private val favoritesDao: FavoritesDao, private val userDao: U
 
     // Cerinta Etapa 1: Networking si Background
     suspend fun searchCities(name: String): List<City> = withContext(Dispatchers.IO) {
-        val url = "https://geocoding-api.open-meteo.com/v1/search?name=$name&count=5&language=ro&format=json"
+        val url = "${geocodingBaseUrl}search?name=$name&count=5&language=ro&format=json"
         try {
             val response = client.newCall(Request.Builder().url(url).build()).execute()
             val body = response.body?.string()
             val list = mutableListOf<City>()
+            
             if (response.isSuccessful && body != null) {
-                val results = JSONObject(body).optJSONArray("results")
-                if (results != null) {
-                    for (i in 0 until results.length()) {
-                        val obj = results.getJSONObject(i)
-                        val country = obj.optString("country", "")
-                        val cityName = obj.getString("name")
-                        val displayName = if (country.isNotEmpty()) "$cityName, $country" else cityName
-                        
-                        // Nota: La search, City nu are ID de user inca, punem 0 temporar
-                        list.add(City(
-                            id = "${obj.getDouble("latitude")},${obj.getDouble("longitude")}",
-                            userId = 0,
-                            name = displayName,
-                            lat = obj.getDouble("latitude"),
-                            lon = obj.getDouble("longitude")
-                        ))
-                    }
+                val geoResponse = gson.fromJson(body, GeocodingResponse::class.java)
+                geoResponse.results?.forEach { obj ->
+                    val displayName = if (!obj.country.isNullOrEmpty()) "${obj.name}, ${obj.country}" else obj.name
+                    list.add(City(
+                        id = "${obj.latitude},${obj.longitude}",
+                        userId = 0,
+                        name = displayName,
+                        lat = obj.latitude,
+                        lon = obj.longitude
+                    ))
                 }
             }
             list
@@ -102,6 +139,7 @@ class WeatherRepo(private val favoritesDao: FavoritesDao, private val userDao: U
 
     // Auth operations
     suspend fun login(username: String, pass: String): User? = userDao.login(username, pass)
+    
     suspend fun register(user: User): Boolean {
         if (userDao.checkUserExists(user.username) != null) return false
         userDao.register(user)
