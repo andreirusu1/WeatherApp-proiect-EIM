@@ -1,6 +1,7 @@
 package com.example.proiect
 
 import android.app.Application
+import android.content.Context
 import android.location.Geocoder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -78,7 +79,19 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateCity(city: City) {
         _currentCity.value = city
+        saveLastLocation(city) // Salvam locatia pentru Worker
         fetchWeatherForCity(city)
+    }
+    
+    // Salvam coordonatele in SharedPreferences pentru a fi accesibile din Background Worker
+    private fun saveLastLocation(city: City) {
+        val sharedPref = getApplication<Application>().getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putString("last_lat", city.lat.toString())
+            putString("last_lon", city.lon.toString())
+            putString("last_city_name", city.name)
+            apply()
+        }
     }
 
     fun fetchWeatherForCity(city: City) {
