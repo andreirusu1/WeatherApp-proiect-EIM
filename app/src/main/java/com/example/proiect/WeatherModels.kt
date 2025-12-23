@@ -30,7 +30,7 @@ data class WeatherData(
 data class User(
     @PrimaryKey(autoGenerate = true) val uid: Int = 0,
     val username: String,
-    val password: String // In productie, parolele ar trebui hash-uite!
+    val password: String
 )
 
 @Entity(tableName = "favorites", primaryKeys = ["id", "userId"])

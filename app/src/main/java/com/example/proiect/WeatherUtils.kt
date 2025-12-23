@@ -24,14 +24,14 @@ fun getWeatherIcon(code: Int): ImageVector {
 fun getWeatherDescription(code: Int): String {
     return when (code) {
         0 -> "Cer senin"
-        1, 2 -> "Parțial noros"
-        3 -> "Înnorat"
-        45, 48 -> "Ceață"
-        51, 53, 55 -> "Burniță"
+        1, 2 -> "Partial noros"
+        3 -> "Innorat"
+        45, 48 -> "Ceata"
+        51, 53, 55 -> "Burnita"
         61, 63, 65 -> "Ploaie"
         71, 73, 75 -> "Ninsoare"
         80, 81, 82 -> "Averse"
-        95, 96, 99 -> "Furtună"
+        95, 96, 99 -> "Furtuna"
         else -> "Necunoscut"
     }
 }

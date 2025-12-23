@@ -27,7 +27,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     private val _weatherData = MutableStateFlow<WeatherData?>(null)
     val weatherData: StateFlow<WeatherData?> = _weatherData.asStateFlow()
 
-    private val _currentCity = MutableStateFlow<City>(City("44.43,26.10", 0, "București", 44.43, 26.10))
+    private val _currentCity = MutableStateFlow<City>(City("44.43,26.10", 0, "Bucuresti", 44.43, 26.10))
     val currentCity: StateFlow<City> = _currentCity.asStateFlow()
 
     private val _favorites = MutableStateFlow<List<City>>(emptyList())
@@ -43,6 +43,43 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
 
+    // --- Preferinte Unitati ---
+    // True = Imperial (Fahrenheit / mph), False = Metric (Celsius / km/h)
+    private val _isImperialTemp = MutableStateFlow(false)
+    val isImperialTemp: StateFlow<Boolean> = _isImperialTemp.asStateFlow()
+
+    private val _isImperialWind = MutableStateFlow(false)
+    val isImperialWind: StateFlow<Boolean> = _isImperialWind.asStateFlow()
+
+    init {
+        loadPreferences()
+    }
+
+    private fun loadPreferences() {
+        val sharedPref = getApplication<Application>().getSharedPreferences("settings_prefs", Context.MODE_PRIVATE)
+        _isImperialTemp.value = sharedPref.getBoolean("imperial_temp", false)
+        _isImperialWind.value = sharedPref.getBoolean("imperial_wind", false)
+    }
+
+    fun setTempUnit(isImperial: Boolean) {
+        _isImperialTemp.value = isImperial
+        val sharedPref = getApplication<Application>().getSharedPreferences("settings_prefs", Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putBoolean("imperial_temp", isImperial)
+            apply()
+        }
+    }
+
+    fun setWindUnit(isImperial: Boolean) {
+        _isImperialWind.value = isImperial
+        val sharedPref = getApplication<Application>().getSharedPreferences("settings_prefs", Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putBoolean("imperial_wind", isImperial)
+            apply()
+        }
+    }
+    // -------------------------
+
     // Auth methods
     fun login(username: String, pass: String) {
         viewModelScope.launch {
@@ -52,7 +89,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 _loginError.value = null
                 refreshFavorites() // Incarca favoritele userului
             } else {
-                _loginError.value = "Utilizator sau parolă incorectă"
+                _loginError.value = "Utilizator sau parola incorecta"
             }
         }
     }
@@ -67,7 +104,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             if (success) {
                 login(username, pass) // Auto-login dupa register
             } else {
-                _loginError.value = "Utilizatorul există deja!"
+                _loginError.value = "Utilizatorul exista deja!"
             }
         }
     }
@@ -152,14 +189,14 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                                 foundCity = City(
                                     id = "${location.latitude},${location.longitude}",
                                     userId = 0,
-                                    name = address.locality ?: "Locație Curentă",
+                                    name = address.locality ?: "Locatie Curenta",
                                     lat = location.latitude,
                                     lon = location.longitude
                                 )
                             }
                         } catch (e: Exception) { }
 
-                        val finalCity = foundCity ?: City("${location.latitude},${location.longitude}", 0, "Locație Curentă", location.latitude, location.longitude)
+                        val finalCity = foundCity ?: City("${location.latitude},${location.longitude}", 0, "Locatie Curenta", location.latitude, location.longitude)
                         withContext(Dispatchers.Main) {
                             updateCity(finalCity)
                         }

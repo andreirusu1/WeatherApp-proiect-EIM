@@ -25,13 +25,24 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
-// Cerinta Etapa 1: Utilizare Jetpack Compose pentru UI modern si declarativ
+// Helper functions pentru conversie
+fun formatTemp(celsius: Double, isImperial: Boolean): String {
+    val value = if (isImperial) (celsius * 9/5) + 32 else celsius
+    return String.format(Locale.US, "%.1f%s", value, if(isImperial) "°F" else "°C")
+}
+
+fun formatSpeed(kmh: Double, isImperial: Boolean): String {
+    val value = if (isImperial) kmh * 0.621371 else kmh
+    return String.format(Locale.US, "%.1f %s", value, if(isImperial) "mph" else "km/h")
+}
+
 @Composable
 fun WeatherCard(title: String, value: String, icon: ImageVector) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.7f)),
-        modifier = Modifier.padding(4.dp).size(width = 100.dp, height = 90.dp),
+        modifier = Modifier.padding(4.dp).size(width = 110.dp, height = 90.dp), // Marit putin pt text mph
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(
@@ -47,7 +58,7 @@ fun WeatherCard(title: String, value: String, icon: ImageVector) {
 }
 
 @Composable
-fun HourlyForecastItem(forecast: HourlyForecast) {
+fun HourlyForecastItem(forecast: HourlyForecast, isImperialTemp: Boolean) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
@@ -73,7 +84,7 @@ fun HourlyForecastItem(forecast: HourlyForecast) {
             modifier = Modifier.weight(1f)
         )
         Text(
-            text = "${forecast.temp}°", 
+            text = formatTemp(forecast.temp, isImperialTemp), 
             fontSize = 18.sp, 
             fontWeight = FontWeight.Bold, 
             color = Color.White
@@ -153,6 +164,10 @@ fun HomeScreen(viewModel: WeatherViewModel) {
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     
+    // Preferinte
+    val isImperialTemp by viewModel.isImperialTemp.collectAsStateWithLifecycle()
+    val isImperialWind by viewModel.isImperialWind.collectAsStateWithLifecycle()
+    
     LaunchedEffect(city) {
         viewModel.fetchWeatherForCity(city)
     }
@@ -183,14 +198,16 @@ fun HomeScreen(viewModel: WeatherViewModel) {
                                 modifier = Modifier.size(120.dp),
                                 tint = Color.White
                             )
-                            Text("${weatherData!!.temperature}°C", fontSize = 64.sp, color = Color.White)
+                            // Conversie Temperatura
+                            Text(formatTemp(weatherData!!.temperature, isImperialTemp), fontSize = 64.sp, color = Color.White)
                             Text(getWeatherDescription(weatherData!!.weatherCode), fontSize = 24.sp, color = Color.White)
                             
                             Spacer(modifier = Modifier.height(24.dp))
                             
                             Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                                 WeatherCard("Umiditate", "${weatherData!!.humidity}%", Icons.Default.WaterDrop)
-                                WeatherCard("Vânt", "${weatherData!!.windSpeed} km/h", Icons.Default.Air)
+                                // Conversie Vant
+                                WeatherCard("Vânt", formatSpeed(weatherData!!.windSpeed, isImperialWind), Icons.Default.Air)
                             }
 
                             Spacer(modifier = Modifier.height(24.dp))
@@ -205,7 +222,7 @@ fun HomeScreen(viewModel: WeatherViewModel) {
                     }
                     
                     items(weatherData!!.hourly) {
-                        HourlyForecastItem(it)
+                        HourlyForecastItem(it, isImperialTemp)
                         Divider(color = Color.White.copy(alpha = 0.3f), modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 }
@@ -222,6 +239,9 @@ fun HomeScreen(viewModel: WeatherViewModel) {
 fun ForecastScreen(viewModel: WeatherViewModel) {
     val city by viewModel.currentCity.collectAsStateWithLifecycle()
     val weatherData by viewModel.weatherData.collectAsStateWithLifecycle()
+    
+    // Preferinte
+    val isImperialTemp by viewModel.isImperialTemp.collectAsStateWithLifecycle()
 
     LaunchedEffect(city) {
          viewModel.fetchWeatherForCity(city)
@@ -252,7 +272,10 @@ fun ForecastScreen(viewModel: WeatherViewModel) {
                                     Text(getWeatherDescription(day.weatherCode), fontSize = 13.sp, color = Color.DarkGray)
                                 }
                                 Icon(getWeatherIcon(day.weatherCode), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
-                                Text("${day.maxTemp}° / ${day.minTemp}°", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "${formatTemp(day.maxTemp, isImperialTemp)} / ${formatTemp(day.minTemp, isImperialTemp)}", 
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -368,13 +391,72 @@ fun FavoritesScreen(viewModel: WeatherViewModel, onCitySelected: () -> Unit) {
 
 @Composable
 fun SettingsScreen(viewModel: WeatherViewModel, onLogout: () -> Unit) {
+    val isImperialTemp by viewModel.isImperialTemp.collectAsStateWithLifecycle()
+    val isImperialWind by viewModel.isImperialWind.collectAsStateWithLifecycle()
+    
     val backgroundBrush = Brush.verticalGradient(listOf(Color(0xFFAB47BC), Color(0xFF7E57C2)))
-    Box(modifier = Modifier.fillMaxSize().background(backgroundBrush), contentAlignment = Alignment.Center) {
-        Button(onClick = {
-            viewModel.logout()
-            onLogout()
-        }) {
-            Text("Delogare")
+    
+    Box(modifier = Modifier.fillMaxSize().background(backgroundBrush)) {
+        Column(modifier = Modifier.padding(24.dp).fillMaxWidth()) {
+            Text("Setări", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Unități de Măsură", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Switch Temp
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Temperatură")
+                            Text(if(isImperialTemp) "Fahrenheit (°F)" else "Celsius (°C)", fontSize = 12.sp, color = Color.Gray)
+                        }
+                        Switch(
+                            checked = isImperialTemp,
+                            onCheckedChange = { viewModel.setTempUnit(it) }
+                        )
+                    }
+                    
+                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+                    
+                    // Switch Wind
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Viteza Vântului")
+                            Text(if(isImperialWind) "Imperial (mph)" else "Metric (km/h)", fontSize = 12.sp, color = Color.Gray)
+                        }
+                        Switch(
+                            checked = isImperialWind,
+                            onCheckedChange = { viewModel.setWindUnit(it) }
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.weight(1f))
+            
+            Button(
+                onClick = {
+                    viewModel.logout()
+                    onLogout()
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f))
+            ) {
+                Text("Deconectare", fontSize = 18.sp)
+            }
         }
     }
 }

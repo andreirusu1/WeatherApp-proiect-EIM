@@ -41,9 +41,7 @@ class WeatherNotificationWorker(
                 // Obtinem prognoza pentru urmatoarea ora
                 val nextHour = (LocalDateTime.now().hour + 1) % 24
                 
-                // Cautam in lista orara prognoza care corespunde cu nextHour
-                // Lista `hourly` din WeatherData contine string-uri de timp (ex: "12:00")
-                // Trebuie sa extragem ora din string pentru a face match
+
                 val forecast = weatherData.hourly.find { 
                     try {
                         val h = it.time.substringBefore(":").toIntOrNull() ?: -1
@@ -85,7 +83,7 @@ class WeatherNotificationWorker(
 
         val timeText = if (hour != -1) "la ora $hour:00" else "acum"
         
-        // Apelam functia direct (e top-level in WeatherUtils.kt), nu WeatherUtils.getWeatherDescription
+
         val desc = getWeatherDescription(code)
 
         val builder = NotificationCompat.Builder(context, channelId)
