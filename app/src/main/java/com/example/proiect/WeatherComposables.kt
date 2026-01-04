@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import java.util.Locale
 
 // Helper functions pentru conversie
@@ -97,6 +99,7 @@ fun HourlyForecastItem(forecast: HourlyForecast, isImperialTemp: Boolean) {
 fun AuthScreen(viewModel: WeatherViewModel, onLoginSuccess: () -> Unit) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     val loginError by viewModel.loginError.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
 
@@ -133,6 +136,19 @@ fun AuthScreen(viewModel: WeatherViewModel, onLoginSuccess: () -> Unit) {
                     onValueChange = { password = it },
                     label = { Text("Parolă") },
                     singleLine = true,
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        val image = if (passwordVisible)
+                            Icons.Filled.Visibility
+                        else Icons.Filled.VisibilityOff
+
+                        // Please provide localized description for accessibility services
+                        val description = if (passwordVisible) "Hide password" else "Show password"
+
+                        IconButton(onClick = { passwordVisible = !passwordVisible }){
+                            Icon(imageVector  = image, description)
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
 

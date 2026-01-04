@@ -50,7 +50,7 @@ class WeatherRepoTest {
 
     @Test
     fun `fetchWeatherData returns data on successful response`() = runTest {
-        // Simulăm un răspuns JSON valid de la API-ul Open-Meteo
+        // Simulam un raspuns JSON valid de la API-ul Open-Meteo
         val mockResponse = MockResponse()
             .setResponseCode(200)
             .setBody("""
