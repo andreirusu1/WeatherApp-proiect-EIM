@@ -47,7 +47,10 @@
 
 
 ### Tehnologii Utilizate
+
 *   **Limbaj:** Kotlin
-*   **UI:** Android Fragments + Jetpack Compose
-*   **Networking:** OkHttp
-*   **Stocare Locala:** Room Database (pentru Favorite)
+*   **Arhitectura & UI:** Android Fragments, ViewModel, Jetpack Compose
+*   **Networking & Baza de Date Cloud:** OkHttp, Firebase (Firestore, Authentication)
+*   **Procese Background:** Kotlin Coroutines, WorkManager
+*   **Stocare Locala:** SharedPreferences
+*   **Servicii:** Google Play Services (Location)
