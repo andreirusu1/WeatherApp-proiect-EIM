@@ -28,7 +28,29 @@
 ### 5. Utilizare Fragmente 
 *   **Implementare:** Intreaga structura de navigare respecta cerinta explicita de a folosi sistemul de Fragmente Android (`HomeFragment`, `FavoritesFragment`, etc.).
 
----
+### Etapa 2
+
+**1. Functionalitati de Networking Complexe (Firebase)**
+*   **Implementare:** Aplicatia suporta conturi de utilizatori. Orasele favorite sunt salvate in cloud si sunt specifice fiecarui cont.
+*   **Tehnic:** S-a utilizat Firebase Authentication (login/register) si Firebase Firestore (baza de date pentru favorite).
+
+**2. Extinderea Functionalitatii (Stocare, Serializare)**
+*   **Implementare:** Utilizatorii pot alege unitatile de masura (C/F, kmh/mph). Aplicatia retine ultimul oras cautat.
+*   **Tehnic:** S-au folosit SharedPreferences pentru a salva local preferintele utilizatorului.
+
+**3. Broadcast Receivers**
+*   **Implementare:** Aplicatia reactioneaza la schimbarile modului avion pentru a gestiona starea conectivitatii.
+*   **Tehnic:** S-a implementat un `BroadcastReceiver` care asculta evenimentul de sistem `ACTION_AIRPLANE_MODE_CHANGED`.
+
+**4. Notificari Push**
+*   **Implementare:** Aplicatia trimite notificari periodice cu prognoza meteo pentru locatia relevanta.
+*   **Tehnic:** S-a folosit `WorkManager` pentru a rula un task in background ce descarca datele si afiseaza o notificare.
+
+**5. Teste Unitare Serioase**
+*   **Implementare:** S-a validat componenta de networking (`WeatherRepo`) pentru a asigura corectitudinea datelor primite.
+*   **Tehnic:** S-au folosit `MockWebServer` pentru a sim
+
+
 
 ### Tehnologii Utilizate
 *   **Limbaj:** Kotlin
