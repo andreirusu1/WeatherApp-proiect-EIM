@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity() {
         if (isGranted) fetchLocation()
     }
     
+    // cerinta etapa 2: notificari (push)
     private val notificationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -97,19 +98,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // broadcast receiver: inregistram receiver-ul cand activitatea devine vizibila
+    // cerinta etapa 2: broadcast receivers
     override fun onStart() {
         super.onStart()
         val filter = IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED)
         registerReceiver(airplaneModeReceiver, filter)
     }
 
-    // broadcast receiver: oprim ascultarea cand activitatea nu mai e vizibila pentru a economisi resurse
     override fun onStop() {
         super.onStop()
         unregisterReceiver(airplaneModeReceiver)
     }
 
+    // cerinta etapa 2: notificari (push)
     private fun schedulePeriodicNotifications() {
         // schimbare la 1 ora (60 minute) conform cerintei
         val workRequest = PeriodicWorkRequestBuilder<WeatherNotificationWorker>(

@@ -5,8 +5,9 @@ import android.content.Context
 import android.location.Geocoder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,12 +18,9 @@ import java.util.Locale
 
 class WeatherViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Cerinta Etapa 1 & 2: Stocare persistenta (Room) cu suport Multi-User
-    private val db = Room.databaseBuilder(application, AppDatabase::class.java, "weather-db")
-        .fallbackToDestructiveMigration() // Reset DB la upgrade de versiune pt simplitate
-        .build()
-    
-    private val repo = WeatherRepo(db.favoritesDao(), db.userDao())
+    // cerinta etapa 2: networking complex (firebase)
+    // cerinta etapa 2: extinderea functionalitatii (multi-user)
+    private val repo = WeatherRepo()
 
     private val _weatherData = MutableStateFlow<WeatherData?>(null)
     val weatherData: StateFlow<WeatherData?> = _weatherData.asStateFlow()
@@ -36,15 +34,15 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     private val _searchResults = MutableStateFlow<List<City>>(emptyList())
     val searchResults: StateFlow<List<City>> = _searchResults.asStateFlow()
 
-    // User State
+    // user state
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
 
-    // --- Preferinte Unitati ---
-    // True = Imperial (Fahrenheit / mph), False = Metric (Celsius / km/h)
+    // --- preferinte unitati ---
+    // true = imperial (fahrenheit / mph), false = metric (celsius / km/h)
     private val _isImperialTemp = MutableStateFlow(false)
     val isImperialTemp: StateFlow<Boolean> = _isImperialTemp.asStateFlow()
 
@@ -53,12 +51,34 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         loadPreferences()
+        loadLastLocation()
     }
 
     private fun loadPreferences() {
         val sharedPref = getApplication<Application>().getSharedPreferences("settings_prefs", Context.MODE_PRIVATE)
         _isImperialTemp.value = sharedPref.getBoolean("imperial_temp", false)
         _isImperialWind.value = sharedPref.getBoolean("imperial_wind", false)
+    }
+    
+    // cerinta etapa 2: stocare + serializare (shared preferences)
+    private fun loadLastLocation() {
+        val sharedPref = getApplication<Application>().getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+        val latStr = sharedPref.getString("last_lat", null)
+        val lonStr = sharedPref.getString("last_lon", null)
+        val name = sharedPref.getString("last_city_name", null)
+
+        if (latStr != null && lonStr != null && name != null) {
+            val lat = latStr.toDoubleOrNull() ?: 44.43
+            val lon = lonStr.toDoubleOrNull() ?: 26.10
+            val city = City(
+                id = "${lat},${lon}",
+                userId = 0,
+                name = name,
+                lat = lat,
+                lon = lon
+            )
+            _currentCity.value = city
+        }
     }
 
     fun setTempUnit(isImperial: Boolean) {
@@ -80,14 +100,14 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     }
     // -------------------------
 
-    // Auth methods
+    // auth methods
     fun login(username: String, pass: String) {
         viewModelScope.launch {
             val user = repo.login(username, pass)
             if (user != null) {
                 _currentUser.value = user
                 _loginError.value = null
-                refreshFavorites() // Incarca favoritele userului
+                refreshFavorites() // incarca favoritele userului
             } else {
                 _loginError.value = "Utilizator sau parola incorecta"
             }
@@ -96,15 +116,21 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     fun register(username: String, pass: String) {
         viewModelScope.launch {
-            if (username.length < 3 || pass.length < 3) {
-                _loginError.value = "Minim 3 caractere!"
+            // firebase impune minim 6 caractere pentru parola
+            if (username.length < 3) {
+                _loginError.value = "Utilizator: minim 3 caractere!"
                 return@launch
             }
+            if (pass.length < 6) {
+                _loginError.value = "Parola: minim 6 caractere!"
+                return@launch
+            }
+            // in firebase registration nu face login automat decat daca e specificat, dar aici am pus manual
             val success = repo.register(User(username = username, password = pass))
             if (success) {
-                login(username, pass) // Auto-login dupa register
+                login(username, pass) // auto-login dupa register
             } else {
-                _loginError.value = "Utilizatorul exista deja!"
+                _loginError.value = "Eroare la inregistrare (email deja folosit?)"
             }
         }
     }
@@ -116,11 +142,11 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateCity(city: City) {
         _currentCity.value = city
-        saveLastLocation(city) // Salvam locatia pentru Worker
+        saveLastLocation(city) // salvam locatia pentru worker
         fetchWeatherForCity(city)
     }
     
-    // Salvam coordonatele in SharedPreferences pentru a fi accesibile din Background Worker
+    // cerinta etapa 2: stocare + serializare (shared preferences)
     private fun saveLastLocation(city: City) {
         val sharedPref = getApplication<Application>().getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
         with(sharedPref.edit()) {
@@ -150,7 +176,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     fun addToFavorites(city: City) {
         val user = _currentUser.value ?: return
-        // Cream o copie a orasului asociata userului curent
+        // cream o copie a orasului asociata userului curent
         val userCity = city.copy(userId = user.uid)
         
         viewModelScope.launch {
@@ -176,33 +202,38 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     
     fun fetchUserLocation(fusedLocationClient: FusedLocationProviderClient) {
         try {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        val geocoder = Geocoder(getApplication(), Locale.getDefault())
-                        var foundCity: City? = null
-                        try {
-                            @Suppress("DEPRECATION")
-                            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                            if (!addresses.isNullOrEmpty()) {
-                                val address = addresses[0]
-                                foundCity = City(
-                                    id = "${location.latitude},${location.longitude}",
-                                    userId = 0,
-                                    name = address.locality ?: "Locatie Curenta",
-                                    lat = location.latitude,
-                                    lon = location.longitude
-                                )
-                            }
-                        } catch (e: Exception) { }
+            // folosim getcurrentlocation cu prioritate mare in loc de lastlocation
+            // pentru ca lastlocation poate fi null pe emulatoare sau la prima rulare
+            val cancellationToken = CancellationTokenSource()
+            
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationToken.token)
+                .addOnSuccessListener { location ->
+                    if (location != null) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val geocoder = Geocoder(getApplication(), Locale.getDefault())
+                            var foundCity: City? = null
+                            try {
+                                @Suppress("DEPRECATION")
+                                val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                                if (!addresses.isNullOrEmpty()) {
+                                    val address = addresses[0]
+                                    foundCity = City(
+                                        id = "${location.latitude},${location.longitude}",
+                                        userId = 0,
+                                        name = address.locality ?: "Locatie Curenta",
+                                        lat = location.latitude,
+                                        lon = location.longitude
+                                    )
+                                }
+                            } catch (e: Exception) { }
 
-                        val finalCity = foundCity ?: City("${location.latitude},${location.longitude}", 0, "Locatie Curenta", location.latitude, location.longitude)
-                        withContext(Dispatchers.Main) {
-                            updateCity(finalCity)
+                            val finalCity = foundCity ?: City("${location.latitude},${location.longitude}", 0, "Locatie Curenta", location.latitude, location.longitude)
+                            withContext(Dispatchers.Main) {
+                                updateCity(finalCity)
+                            }
                         }
                     }
                 }
-            }
         } catch (e: SecurityException) { }
     }
 }

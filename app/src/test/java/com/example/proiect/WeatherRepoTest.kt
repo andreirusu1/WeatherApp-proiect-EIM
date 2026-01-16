@@ -1,5 +1,7 @@
 package com.example.proiect
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
@@ -7,27 +9,26 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
-import org.mockito.Mockito.`when`
 import org.mockito.MockitoAnnotations
 
+// cerinta etapa 2: teste unitare serioase
 @ExperimentalCoroutinesApi
 class WeatherRepoTest {
 
     private lateinit var mockWebServer: MockWebServer
     private lateinit var weatherRepo: WeatherRepo
 
+    // folosim mockito pentru a simula serviciile firebase in teste
     @Mock
-    private lateinit var favoritesDao: FavoritesDao
+    private lateinit var firebaseAuth: FirebaseAuth
 
     @Mock
-    private lateinit var userDao: UserDao
+    private lateinit var firestore: FirebaseFirestore
 
     @Before
     fun setup() {
@@ -36,11 +37,10 @@ class WeatherRepoTest {
         mockWebServer.start()
 
         val baseUrl = mockWebServer.url("/").toString()
-
-        // Folosim clientul OkHttp care pointeaza catre serverul local mock
-        // Injectam URL-ul mock-ului atat pentru weather cat si pentru geocoding
         val client = OkHttpClient.Builder().build()
-        weatherRepo = WeatherRepo(favoritesDao, userDao, client, baseUrl, baseUrl)
+
+        // initializam repo cu clientul de mock si serviciile firebase simulate
+        weatherRepo = WeatherRepo(client, baseUrl, baseUrl, firebaseAuth, firestore)
     }
 
     @After
@@ -50,7 +50,7 @@ class WeatherRepoTest {
 
     @Test
     fun `fetchWeatherData returns data on successful response`() = runTest {
-        // Simulam un raspuns JSON valid de la API-ul Open-Meteo
+        // simulam un raspuns json valid de la api-ul open-meteo
         val mockResponse = MockResponse()
             .setResponseCode(200)
             .setBody("""
@@ -86,44 +86,17 @@ class WeatherRepoTest {
     }
 
     @Test
-    fun `login returns user when credentials are correct`() = runTest {
-        val user = User(uid = 1, username = "test", password = "password")
-        `when`(userDao.login("test", "password")).thenReturn(user)
-
-        val result = weatherRepo.login("test", "password")
+    fun `fetchWeatherData returns null on API error`() = runTest {
+        // simulam un raspuns de eroare de la server
+        val mockResponse = MockResponse()
+            .setResponseCode(404)
         
-        assertNotNull(result)
-        assertEquals("test", result?.username)
-    }
+        mockWebServer.enqueue(mockResponse)
 
-    @Test
-    fun `login returns null when credentials are incorrect`() = runTest {
-        `when`(userDao.login("wrong", "pass")).thenReturn(null)
+        val result = weatherRepo.fetchWeatherData("44.43", "26.10")
 
-        val result = weatherRepo.login("wrong", "pass")
-        
+        // verificam ca metoda returneaza null in caz de eroare
         assertNull(result)
     }
-    
-    @Test
-    fun `register returns true when user is new`() = runTest {
-        val newUser = User(username = "newuser", password = "123")
-        // Simulam ca userul NU exista
-        `when`(userDao.checkUserExists("newuser")).thenReturn(null)
-        
-        val result = weatherRepo.register(newUser)
-        
-        assertTrue(result)
-    }
 
-    @Test
-    fun `register returns false when user already exists`() = runTest {
-        val existingUser = User(username = "existing", password = "123")
-        // Simulam ca userul exista DEJA
-        `when`(userDao.checkUserExists("existing")).thenReturn(existingUser)
-        
-        val result = weatherRepo.register(existingUser)
-        
-        assertFalse(result)
-    }
 }

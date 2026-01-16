@@ -1,8 +1,11 @@
 package com.example.proiect
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -11,15 +14,15 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 class WeatherRepo(
-    private val favoritesDao: FavoritesDao, 
-    private val userDao: UserDao,
     private val client: OkHttpClient = OkHttpClient(),
     private val weatherBaseUrl: String = "https://api.open-meteo.com/v1/",
-    private val geocodingBaseUrl: String = "https://geocoding-api.open-meteo.com/v1/"
+    private val geocodingBaseUrl: String = "https://geocoding-api.open-meteo.com/v1/",
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     private val gson = Gson()
 
-    // Modele interne pentru Gson (DTOs)
+    // modele interne pentru gson (dtos)
     private data class WeatherResponse(
         val current: CurrentWeather,
         val hourly: HourlyWeather,
@@ -57,7 +60,7 @@ class WeatherRepo(
         val country: String?
     )
 
-    // Cerinta Etapa 1: Networking (REST API) si Procese background
+    // cerinta etapa 1: networking (rest api) si procese background
     suspend fun fetchWeatherData(lat: String, lon: String): WeatherData? = withContext(Dispatchers.IO) {
         val url = "${weatherBaseUrl}forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto"
         try {
@@ -67,7 +70,7 @@ class WeatherRepo(
             if (response.isSuccessful && body != null) {
                 val weatherResponse = gson.fromJson(body, WeatherResponse::class.java)
                 
-                // Procesare Daily
+                // procesare daily
                 val dailyList = mutableListOf<DailyForecast>()
                 val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
                 val outputFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -85,7 +88,7 @@ class WeatherRepo(
                     )
                 }
 
-                // Procesare Hourly
+                // procesare hourly
                 val hourlyList = mutableListOf<HourlyForecast>()
                 val now = LocalDateTime.now()
                 val currentHour = now.hour
@@ -112,7 +115,7 @@ class WeatherRepo(
         } catch (e: Exception) { null }
     }
 
-    // Cerinta Etapa 1: Networking si Background
+    // cerinta etapa 1: networking si background
     suspend fun searchCities(name: String): List<City> = withContext(Dispatchers.IO) {
         val url = "${geocodingBaseUrl}search?name=$name&count=5&language=ro&format=json"
         try {
@@ -126,7 +129,7 @@ class WeatherRepo(
                     val displayName = if (!obj.country.isNullOrEmpty()) "${obj.name}, ${obj.country}" else obj.name
                     list.add(City(
                         id = "${obj.latitude},${obj.longitude}",
-                        userId = 0,
+                        userId = 0, // nu mai folosim int in firebase, dar pastram modelul
                         name = displayName,
                         lat = obj.latitude,
                         lon = obj.longitude
@@ -137,17 +140,82 @@ class WeatherRepo(
         } catch (e: Exception) { emptyList() }
     }
 
-    // Auth operations
-    suspend fun login(username: String, pass: String): User? = userDao.login(username, pass)
+    // auth operations cu firebase
+    suspend fun login(email: String, pass: String): User? = withContext(Dispatchers.IO) {
+        try {
+            val fakeEmail = if(email.contains("@")) email else "$email@weatherapp.com"
+            
+            auth.signInWithEmailAndPassword(fakeEmail, pass).await()
+            val firebaseUser = auth.currentUser
+            if (firebaseUser != null) {
+                User(uid = 1, username = firebaseUser.email?.substringBefore("@") ?: "User", password = "")
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
     
-    suspend fun register(user: User): Boolean {
-        if (userDao.checkUserExists(user.username) != null) return false
-        userDao.register(user)
-        return true
+    suspend fun register(user: User): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val fakeEmail = if(user.username.contains("@")) user.username else "${user.username}@weatherapp.com"
+            auth.createUserWithEmailAndPassword(fakeEmail, user.password).await()
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
-    // Favorites operations per user
-    suspend fun getFavoriteCities(userId: Int): List<City> = favoritesDao.getAllForUser(userId)
-    suspend fun addFavoriteCity(city: City) = favoritesDao.add(city)
-    suspend fun removeFavoriteCity(cityId: String, userId: Int) = favoritesDao.remove(cityId, userId)
+    // favorites operations cu firestore
+    suspend fun getFavoriteCities(ignoredUserId: Int): List<City> = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: return@withContext emptyList()
+        try {
+            val snapshot = db.collection("users")
+                .document(user.uid)
+                .collection("favorites")
+                .get()
+                .await()
+            
+            snapshot.documents.mapNotNull { doc ->
+                val name = doc.getString("name") ?: ""
+                val lat = doc.getDouble("lat") ?: 0.0
+                val lon = doc.getDouble("lon") ?: 0.0
+                val id = doc.getString("id") ?: "${lat},${lon}"
+                City(id, 0, name, lat, lon)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun addFavoriteCity(city: City) = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: return@withContext
+        try {
+            val cityMap = hashMapOf(
+                "id" to city.id,
+                "name" to city.name,
+                "lat" to city.lat,
+                "lon" to city.lon
+            )
+            db.collection("users")
+                .document(user.uid)
+                .collection("favorites")
+                .document(city.id)
+                .set(cityMap)
+                .await()
+        } catch (e: Exception) { }
+    }
+
+    suspend fun removeFavoriteCity(cityId: String, ignoredUserId: Int) = withContext(Dispatchers.IO) {
+        val user = auth.currentUser ?: return@withContext
+        try {
+            db.collection("users")
+                .document(user.uid)
+                .collection("favorites")
+                .document(cityId)
+                .delete()
+                .await()
+        } catch (e: Exception) { }
+    }
 }

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "77348574543",
-    "project_id": "project-31e74",
-    "storage_bucket": "project-31e74.firebasestorage.app"
+    "project_number": "662239751698",
+    "project_id": "meteoapp-6ed1c",
+    "storage_bucket": "meteoapp-6ed1c.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:77348574543:android:54b0bd8ff97f202f74a13a",
+        "mobilesdk_app_id": "1:662239751698:android:93143e28f7f696946b72cb",
         "android_client_info": {
           "package_name": "com.example.proiect"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyD4mbeD1S-6nowAqVylENSUjs9SumcsPMY"
+          "current_key": "AIzaSyDZ81Iq1OMp9zThnIM335XG9zkBupTUHCk"
         }
       ],
       "services": {

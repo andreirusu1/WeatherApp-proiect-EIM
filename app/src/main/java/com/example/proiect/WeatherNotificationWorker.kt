@@ -22,12 +22,8 @@ class WeatherNotificationWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            val db = androidx.room.Room.databaseBuilder(
-                applicationContext,
-                AppDatabase::class.java, "weather-db"
-            ).build()
-            
-            val repo = WeatherRepo(db.favoritesDao(), db.userDao())
+            // Nu mai avem nevoie de Room Database aici deoarece WeatherRepo foloseste Firebase
+            val repo = WeatherRepo()
 
             // Citim ultima locatie selectata din SharedPreferences
             val sharedPref = applicationContext.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)

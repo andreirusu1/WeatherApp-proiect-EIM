@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 
+// cerinta etapa 2: broadcast receivers
 class AirplaneModeReceiver : BroadcastReceiver() {
 
     // aceasta functie se apeleaza automat cand sistemul trimite evenimentul ascultat
